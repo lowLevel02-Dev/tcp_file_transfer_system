@@ -53,11 +53,27 @@ int main(){
 	printf("Successful connection established\n");
 
 	file_header_t header;
-	header.filename_len = 8;
-	header.file_size = 12345;
+	const char *filename = "test.txt";
+	const char *file_data = "Hello from the file transfer system";
+	header.filename_len = strlen(filename);
+	header.file_size = strlen(file_data);
 
 	if(send_header(sock_fd, &header) < 0){
 		printf("Failed to send the header\n");
+		close(sock_fd);
+		return -1;
+	}
+	ssize_t bytes_written = write(sock_fd,filename,header.filename_len);
+	if(bytes_written != (ssize_t)header.filename_len){
+		printf("Failed to send the file\n");
+		close(sock_fd);
+		return -1;
+	}
+	bytes_written = write(sock_fd,file_data,header.file_size);
+	if(bytes_written != (ssize_t)header.file_size){
+		printf("failed to send the file");
+		close(sock_fd);
+		return -1;
 	}
 	close(sock_fd);
 	return 0;

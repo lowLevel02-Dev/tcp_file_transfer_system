@@ -30,6 +30,8 @@ int recv_header(int sock_fd, file_header_t *header){
 
 int main(){
 	int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+	int opt = 1;
+	setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 	if(server_fd < 0){
 		perror("socket failed");
 		exit(1);
@@ -68,6 +70,26 @@ int main(){
 	}
 	printf("Recieved header: filename_len=%u, file_size=%lu\n", header.filename_len, header.file_size);
 
+	char filename[256] = {0};
+	ssize_t bytes_read = read(client_fd, filename, header.filename_len);
+	if(bytes_read != (ssize_t)header.filename_len){
+		printf("Failed to recieve the filename \n");
+		close(client_fd);
+		close(server_fd);
+		return -1;
+	}
+	printf("Receiving file: %s\n",filename);
+
+	char *file_data = calloc(header.file_size + 1 , 1); 
+	bytes_read = read(client_fd,file_data,header.file_size);
+	if(bytes_read != (ssize_t)header.file_size){
+		free(file_data);
+		printf("failed.\n");
+		close(client_fd);
+		close(server_fd);
+		return -1;
+	}
+	printf("file content: %s",file_data);
 	close(client_fd);
 	close(server_fd);
 	return 0;
