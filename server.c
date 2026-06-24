@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <endian.h>
 #include <stdint.h>
+#include <sys/epoll.h>
 
 typedef struct{
 	uint32_t filename_len;
@@ -31,12 +32,11 @@ int recv_header(int sock_fd, file_header_t *header){
 int main(){
 	int server_fd = socket(AF_INET, SOCK_STREAM, 0);
 	int opt = 1;
-	setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 	if(server_fd < 0){
 		perror("socket failed");
 		exit(1);
 	}
-
+	setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 	struct sockaddr_in address;
 	address.sin_family = AF_INET;
 	address.sin_addr.s_addr = INADDR_ANY;
@@ -54,12 +54,20 @@ int main(){
 
 	printf("Server listening on port 8080...\n"); 
 
-	int client_fd = accept(server_fd, NULL , NULL);
-	if(client_fd < 0){
-		perror("accept failed");
+	int epoll_fd = epoll_create1(0);
+	if(epoll_fd < 0){
+		perror("epoll_create1 failed");
 		exit(1);
 	}
-	printf("Client connected\n");
+
+	struct epoll_event ev; 
+	ev.events = EPOLLIN;
+	ev.data.fd = server_fd;
+
+	if(epoll_ct1(epoll_fd , EPOLL_CTL_ADD, server_fd, &ev) < 0){
+		perror("epoll_ct1 failed");
+		exit(1);
+	}
 
 	file_header_t header;
 	if(recv_header(client_fd, & header) < 0){
