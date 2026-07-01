@@ -35,6 +35,7 @@ int recv_header(int sock_fd, file_header_t *header)
 
 int main()
 {
+	setbuf(stdout, NULL);
 	int server_fd = socket(AF_INET, SOCK_STREAM, 0);
 	int opt = 1;
 	if (server_fd < 0)
@@ -61,7 +62,6 @@ int main()
 	}
 
 	printf("Server listening on port 8080...\n");
-
 	int epoll_fd = epoll_create1(0);
 	if (epoll_fd < 0)
 	{
@@ -95,20 +95,61 @@ int main()
 			if (events[i].data.fd == server_fd)
 			{
 				int client_fd = accept(server_fd, NULL, NULL);
+				write(2, "ACCEPTED\n", 9);
 				if (client_fd < 0)
 				{
 					perror("accept failed");
 					continue;
 				}
 				printf("Client connected: fd=%d\n", client_fd);
-
 				ev.events = EPOLLIN;
 				ev.data.fd = client_fd;
 				if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) < 0)
 				{
 					perror("epoll_ctl add client failed");
 					close(client_fd);
+					continue;
 				}
+				int fd = client_fd;
+				file_header_t header;
+				if (recv_header(fd, &header) < 0)
+				{
+					printf("Failed to receive header\n");
+				
+					epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, NULL);
+					close(fd);
+					continue;
+				}
+				printf("Received header: filename_len=%u, file_size=%lu\n",header.filename_len, header.file_size);
+				
+				char filename[256] = {0};
+				ssize_t bytes_read = read(fd, filename, header.filename_len);
+				if (bytes_read != (ssize_t)header.filename_len)
+				{
+					printf("Failed to receive filename\n");
+					
+					epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, NULL);
+					close(fd);
+					continue;
+				}
+				printf("Receiving file: %s\n", filename);
+				
+				char *file_data = calloc(header.file_size + 1, 1);
+				bytes_read = read(fd, file_data, header.file_size);
+				if (bytes_read != (ssize_t)header.file_size)
+				{
+					printf("Failed to receive file data\n");
+					
+					free(file_data);
+					epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, NULL);
+					close(fd);
+					continue;
+				}
+				printf("File content: %s\n", file_data);
+				
+				free(file_data);
+				epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, NULL);
+				close(fd);
 			}
 			else
 			{
@@ -118,35 +159,40 @@ int main()
 				if (recv_header(fd, &header) < 0)
 				{
 					printf("Failed to receive header\n");
+					
 					epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, NULL);
 					close(fd);
 					continue;
 				}
-				printf("Received header: filename_len=%u, file_size=%lu\n",
-					   header.filename_len, header.file_size);
+				printf("Received header: filename_len=%u, file_size=%lu\n",header.filename_len, header.file_size);
+				
 
 				char filename[256] = {0};
 				ssize_t bytes_read = read(fd, filename, header.filename_len);
 				if (bytes_read != (ssize_t)header.filename_len)
 				{
 					printf("Failed to receive filename\n");
+					
 					epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, NULL);
 					close(fd);
 					continue;
 				}
 				printf("Receiving file: %s\n", filename);
+				
 
 				char *file_data = calloc(header.file_size + 1, 1);
 				bytes_read = read(fd, file_data, header.file_size);
 				if (bytes_read != (ssize_t)header.file_size)
 				{
 					printf("Failed to receive file data\n");
+					
 					free(file_data);
 					epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, NULL);
 					close(fd);
 					continue;
 				}
 				printf("File content: %s\n", file_data);
+				
 				free(file_data);
 
 				epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, NULL);
